@@ -15,5 +15,4 @@ Phaser 3 based balloon pump alphabet learning game.
 - Click to pop balloons
 - Babyworld-style interaction
 
-## Live Demo
-(Add deployment link here)
+
