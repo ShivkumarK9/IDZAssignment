@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Balloon Burst Prototype</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #333;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+      canvas {
+        border: 4px solid #fff;
+        border-radius: 8px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  </head>
+  <body>
+    <script>
+      const config = {
+        type: Phaser.AUTO,
+        width: 1024,
+        height: 768,
+        backgroundColor: "#fffbd5",
+        physics: {
+          default: "arcade",
+          arcade: { gravity: { y: 0 }, debug: false },
+        },
+        scene: { preload: preload, create: create, update: update },
+      };
+
+      const game = new Phaser.Game(config);
+
+      // --- GAME VARIABLES ---
+      let pumpGroup;
+      let pumpHandle;
+      let isInflating = false;
+      let currentLetterIndex = 0; // Starts at A (0)
+
+      // We map the balloon filenames exactly as seen in your image
+      // Symbol 100001 = Green, 100002 = Blue, etc.
+      const balloonFiles = [
+        "Symbol 100001",
+        "Symbol 100002",
+        "Symbol 100003",
+        "Symbol 100004",
+        "Symbol 100005",
+        "Symbol 100006",
+        "Symbol 100007",
+        "Symbol 100008",
+      ];
+
+      // --- 1. PRELOAD ASSETS ---
+      function preload() {
+        this.load.path = "assets/"; // Ensure your images are in an 'assets' folder
+
+        // Background & Cloud
+        this.load.image("bg", "Symbol 3 copy.png"); // Background
+        this.load.image("cloud", "Symbol 27.png"); // Cloud
+
+        // Pump Parts (Exact IDs from your image)
+        this.load.image("pump_body", "Symbol 320003.png"); // Blue Box
+        this.load.image("pump_nozzle", "Symbol 320002.png"); // Side Nozzle
+        this.load.image("pump_handle", "Symbol 320001.png"); // Purple Handle
+
+        // String
+        this.load.image("string", "Symbol 100011.png"); // Squiggly string
+
+        // Load Balloons
+        balloonFiles.forEach((filename) => {
+          this.load.image(filename, `${filename}.png`);
+        });
+
+        // Load Letters A-Z (Symbol 10001 to Symbol 10026)
+        // A = 10001, B = 10002, ...
+        for (let i = 0; i < 26; i++) {
+          let fileNumber = 10001 + i;
+          let char = String.fromCharCode(65 + i); // 65 is ASCII for 'A'
+          this.load.image(`letter_${char}`, `Symbol ${fileNumber}.png`);
+        }
+      }
+
+      // --- 2. CREATE SCENE ---
+      function create() {
+        // A. Add Background
+        const bg = this.add.image(512, 384, "bg");
+        bg.setDisplaySize(1024, 768); // Fit screen
+
+        // B. Add Clouds
+        createCloud(this, 200, 150, 0.8, 1);
+        createCloud(this, 800, 100, 0.6, 0.8);
+        createCloud(this, 500, 250, 0.5, 0.5);
+
+        // C. Build the Pump
+        const pumpX = 850;
+        const pumpY = 600;
+
+        // 1. Handle (Purple T) - Behind the body usually, or on top depending on art
+        pumpHandle = this.add.image(pumpX, pumpY - 110, "pump_handle");
+
+        // 2. Nozzle (Side piece)
+        const pumpNozzle = this.add.image(
+          pumpX - 70,
+          pumpY - 20,
+          "pump_nozzle"
+        );
+
+        // 3. Body (Blue Box)
+        const pumpBody = this.add.image(pumpX, pumpY, "pump_body");
+
+        // D. Interaction
+        pumpBody.setInteractive({ useHandCursor: true });
+        pumpBody.on("pointerdown", () => {
+          if (!isInflating) {
+            animatePump(this);
+            // Adjust spawn position based on where the nozzle tip is
+            spawnBalloon(this, pumpX - 100, pumpY - 45);
+          }
+        });
+      }
+
+      function update() {}
+
+      // --- 3. HELPER FUNCTIONS ---
+
+      function createCloud(scene, x, y, scale, speed) {
+        const cloud = scene.add
+          .image(x, y, "cloud")
+          .setScale(scale)
+          .setAlpha(0.9);
+        scene.tweens.add({
+          targets: cloud,
+          x: x + 50,
+          duration: 4000 / speed,
+          yoyo: true,
+          repeat: -1,
+          ease: "Sine.easeInOut",
+        });
+      }
+
+      function animatePump(scene) {
+        scene.tweens.add({
+          targets: pumpHandle,
+          y: pumpHandle.y + 40,
+          duration: 100,
+          yoyo: true,
+          ease: "Power1",
+        });
+      }
+
+      function spawnBalloon(scene, x, y) {
+        isInflating = true;
+
+        // 1. Pick Assets
+        const randomBalloonKey = Phaser.Utils.Array.GetRandom(balloonFiles);
+
+        // Calculate Letter (A-Z)
+        const charCode = 65 + (currentLetterIndex % 26);
+        const charStr = String.fromCharCode(charCode);
+
+        // 2. Create Container
+        const container = scene.add.container(x, y);
+
+        // 3. Add Sprites: String -> Balloon -> Letter
+        const str = scene.add.image(0, 70, "string").setOrigin(0.5, 0);
+        const balloon = scene.add.image(0, 0, randomBalloonKey);
+        const letter = scene.add.image(0, -5, `letter_${charStr}`);
+
+        // Scale letter to fit nicely
+        letter.setScale(0.8);
+
+        container.add([str, balloon, letter]);
+
+        // 4. Inflate Animation
+        container.setScale(0.1);
+        scene.tweens.add({
+          targets: container,
+          scale: 0.8,
+          duration: 1000,
+          ease: "Back.out",
+          onComplete: () => {
+            isInflating = false;
+            currentLetterIndex++;
+            releaseBalloon(scene, container);
+          },
+        });
+      }
+
+      function releaseBalloon(scene, container) {
+        // Float Up
+        scene.tweens.add({
+          targets: container,
+          y: -200,
+          duration: 10000 + Math.random() * 2000,
+          ease: "Linear",
+          onComplete: () => container.destroy(),
+        });
+
+        // Sway
+        scene.tweens.add({
+          targets: container,
+          x: container.x - (300 + Math.random() * 200),
+          duration: 12000,
+          ease: "Sine.easeInOut",
+        });
+
+        // Click to Pop
+        const balloonSprite = container.list[1];
+        balloonSprite.setInteractive({ useHandCursor: true });
+
+        balloonSprite.on("pointerdown", () => {
+          burstBalloon(scene, container);
+        });
+      }
+
+      function burstBalloon(scene, container) {
+        // Simple Particle Burst using the cloud texture as generic smoke/pop
+        const particles = scene.add.particles(
+          container.x,
+          container.y,
+          "cloud",
+          {
+            speed: { min: 50, max: 150 },
+            scale: { start: 0.2, end: 0 },
+            alpha: { start: 1, end: 0 },
+            lifespan: 300,
+            blendMode: "ADD",
+          }
+        );
+
+        particles.explode(10);
+        container.destroy();
+      }
+    </script>
+  </body>
+</html>
